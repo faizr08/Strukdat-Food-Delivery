@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-import models, schemas
+import backend.Database as Database, backend.schemas as schemas
 from database import get_db, get_current_user # Dependency database & auth
 
 app = FastAPI()
@@ -12,7 +12,7 @@ def create_m2_data(
     current_user: dict = Depends(get_current_user)
 ):
     # Buat instance model database baru
-    new_data = models.M2Feature(
+    new_data = Database.M2Feature(
         title=payload.title,
         description=payload.description,
         user_id=current_user["id"]
