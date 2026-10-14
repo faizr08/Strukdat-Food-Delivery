@@ -6,7 +6,8 @@
 > **Program Sarjana Departemen Teknik Komputer - Fakultas Teknologi Elektro dan Informatika Cerdas (FTEIC) ITS**  
 
 ---
-
+> **Author :: Faiz Rizqi Aqila Lubis**
+> **NRP :: 5024251025**
 ## 1. Deskripsi Proyek
 
 **2EZ4U APP** adalah simulasi engine backend berkinerja tinggi untuk layanan pesan-antar makanan dan barang (seperti GoFood, GrabFood, ShopeeFood versi mini). Aplikasi dirancang untuk menangani beban trafik tinggi dengan dataset sebesar **200.000+ baris data pesanan** (`pesanan.csv`) dan data graf peta navigasi (`peta.csv`).
