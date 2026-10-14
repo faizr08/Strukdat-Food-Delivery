@@ -1,486 +1,173 @@
+"""
+ui/front.py - Antarmuka Pengguna Tkinter "2EZ4U APP" (Integrasi M1, M2, M3)
+"""
+
+import sys
+import os
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-# ==========================================
-# STRUCTDAT MODULE: M2_Stack-Queue
-# ==========================================
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(current_dir)
+if root_dir not in sys.path:
+    sys.path.append(root_dir)
 
-class Stack:
-    """Implementasi Stack LIFO (Last-In-First-Out)"""
-    def __init__(self):
-        self._items = []
-
-    def push(self, item):
-        self._items.append(item)
-
-    def pop(self):
-        if self.is_empty():
-            return None
-        return self._items.pop()
-
-    def peek(self):
-        if self.is_empty():
-            return None
-        return self._items[-1]
-
-    def is_empty(self):
-        return len(self._items) == 0
-
-    def size(self):
-        return len(self._items)
+from backend.M1_Pesanan import muat_data_pesanan
+from backend.M2_Antrean import StackCart, PostfixEvaluator, NaiveQueue, CircularQueue
+from backend.M3_Laporan import insertion_sort, merge_sort, linear_search, binary_search
 
 
-def evaluate_postfix(expression_str):
-    """
-    Evaluasi ekspresi matematika Postfix (RPN) menggunakan Stack.
-    Contoh: "10 5 + 0.9 *" -> (10 + 5) * 0.9 = 13.5
-    """
-    stack = Stack()
-    tokens = expression_str.strip().split()
-    
-    for token in tokens:
-        if token in ("+", "-", "*", "/", "%", "^"):
-            val2 = stack.pop()
-            val1 = stack.pop()
-            if val1 is None or val2 is None:
-                raise ValueError("Invalid Postfix Expression")
-            
-            if token == "+":
-                res = val1 + val2
-            elif token == "-":
-                res = val1 - val2
-            elif token == "*":
-                res = val1 * val2
-            elif token == "/":
-                res = val1 / val2 if val2 != 0 else 0
-            elif token == "%":
-                res = val1 % val2
-            elif token == "^":
-                res = val1 ** val2
-            stack.push(res)
-        else:
-            try:
-                stack.push(float(token))
-            except ValueError:
-                raise ValueError(f"Invalid token: {token}")
+class App2EZ4U:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("2EZ4U APP - Food Delivery & Data Engine")
+        self.root.geometry("1050x700")
 
-    if stack.size() != 1:
-        raise ValueError("Invalid Postfix Expression")
-    return stack.pop()
+        self.dataset_pesanan = muat_data_pesanan(os.path.join(root_dir, "Data", "pesanan.csv"))
+        self.cached_sorted_data = None
 
+        self.setup_styles()
+        self.create_layout()
+        self.refresh_data_view()
 
-class NaiveQueue:
-    """
-    Implementasi Queue Naif (Linear FIFO Queue)
-    Operasi Dequeue memindahkan seluruh elemen setelah index 0.
-    """
-    def __init__(self):
-        self._items = []
-
-    def enqueue(self, item):
-        self._items.append(item)
-
-    def dequeue(self):
-        if self.is_empty():
-            return None
-        return self._items.pop(0)
-
-    def is_empty(self):
-        return len(self._items) == 0
-
-    def size(self):
-        return len(self._items)
-
-    def get_all(self):
-        return list(self._items)
-
-
-class CircularQueue:
-    """
-    Implementasi Circular Queue (Fixed Capacity Ring Buffer)
-    Memanfaatkan pointer front & rear dengan operasi modulo O(1).
-    """
-    def __init__(self, capacity=5):
-        self.capacity = capacity
-        self._queue = [None] * capacity
-        self.front = -1
-        self.rear = -1
-        self.count = 0
-
-    def is_full(self):
-        return self.count == self.capacity
-
-    def is_empty(self):
-        return self.count == 0
-
-    def enqueue(self, item):
-        if self.is_full():
-            self.dequeue()  # Rotasi saat penuh
-        
-        if self.is_empty():
-            self.front = 0
-            self.rear = 0
-        else:
-            self.rear = (self.rear + 1) % self.capacity
-
-        self._queue[self.rear] = item
-        self.count += 1
-
-    def dequeue(self):
-        if self.is_empty():
-            return None
-        
-        item = self._queue[self.front]
-        self._queue[self.front] = None
-        
-        if self.front == self.rear:
-            self.front = -1
-            self.rear = -1
-        else:
-            self.front = (self.front + 1) % self.capacity
-            
-        self.count -= 1
-        return item
-
-    def get_all(self):
-        if self.is_empty():
-            return []
-        res = []
-        idx = self.front
-        for _ in range(self.count):
-            res.append(self._queue[idx])
-            idx = (idx + 1) % self.capacity
-        return res
-
-
-# ==========================================
-# GUI APPLICATION (JavaCafeApp)
-# ==========================================
-
-class JavaCafeApp(tk.Tk):
-    def __init__(self):
-        super().__init__()
-        self.title("Java Café - Food & Coffee Delivery")
-        self.geometry("430x820")
-        self.resizable(False, False)
-        self.configure(bg="#1E1E24")
-
-        # Color Palette
-        self.colors = {
-            "bg": "#121216",            
-            "card_bg": "#1C1C24",       
-            "card_inner": "#252532",    
-            "accent": "#C67C4E",        
-            "accent_light": "#EDA97A",  
-            "text_white": "#FFFFFF",
-            "text_muted": "#A2A2AD",
-            "star_gold": "#FBBE21",     
-            "nav_bg": "#1A1A22",        
-            "search_bg": "#252530",
-            "badge_green": "#2ECC71"
-        }
-
-        # Data Structures Integration
-        self.cart_stack = Stack()
-        self.cart_items = []
-        self.order_naive_queue = NaiveQueue()
-        self.recent_activity_circular = CircularQueue(capacity=4)
-
-        self.categories = ["All Coffee", "Espresso", "Latte", "Cappuccino", "Cold Brew"]
-        self.selected_category = "All Coffee"
-
-        self.products = [
-            {"id": 1, "name": "Caffe Mocha", "subtitle": "Deep Chocolate & Milk", "price": 4.50, "rating": 4.8, "category": "Espresso", "icon": "☕"},
-            {"id": 2, "name": "Flat White", "subtitle": "Espresso & Microfoam", "price": 3.90, "rating": 4.7, "category": "Latte", "icon": "🥛"},
-            {"id": 3, "name": "Caramel Macchiato", "subtitle": "Vanilla & Caramel Drizzle", "price": 4.99, "rating": 4.9, "category": "Latte", "icon": "🍯"},
-            {"id": 4, "name": "Cold Brew Cream", "subtitle": "Smooth Cold Brew Coffee", "price": 4.20, "rating": 4.6, "category": "Cold Brew", "icon": "🧊"},
-            {"id": 5, "name": "Classic Cappuccino", "subtitle": "Rich Foam & Espresso", "price": 3.75, "rating": 4.5, "category": "Cappuccino", "icon": "☕"}
-        ]
-
-        self._build_ui()
-
-    def _build_ui(self):
-        main_container = tk.Frame(self, bg=self.colors["bg"])
-        main_container.pack(fill="both", expand=True)
-
-        header_frame = tk.Frame(main_container, bg=self.colors["bg"], padx=20, pady=15)
-        header_frame.pack(fill="x")
-
-        loc_sub = tk.Label(header_frame, text="LOCATION", font=("Segoe UI", 8, "bold"), fg=self.colors["text_muted"], bg=self.colors["bg"], anchor="w")
-        loc_sub.pack(fill="x")
-
-        loc_title = tk.Label(header_frame, text="Surabaya, East Java 📍", font=("Segoe UI", 12, "bold"), fg=self.colors["text_white"], bg=self.colors["bg"], anchor="w")
-        loc_title.pack(fill="x")
-
-        avatar_btn = tk.Button(header_frame, text="☕", font=("Segoe UI", 14), bg=self.colors["card_inner"], fg=self.colors["accent"], bd=0, relief="flat", cursor="hand2")
-        avatar_btn.place(relx=1.0, rely=0.1, anchor="ne", width=40, height=40)
-
-        # Notebook Tabs
-        self.notebook = ttk.Notebook(main_container)
-        self.notebook.pack(fill="both", expand=True, padx=10, pady=5)
-
+    def setup_styles(self):
         style = ttk.Style()
-        style.theme_use('default')
-        style.configure('TNotebook', background=self.colors["bg"], borderwidth=0)
-        style.configure('TNotebook.Tab', background=self.colors["card_bg"], foreground="white", padding=[10, 6])
-        style.map('TNotebook.Tab', background=[('selected', self.colors["accent"])])
+        style.theme_use("clam")
+        style.configure("TNotebook.Tab", font=("Arial", 10, "bold"), padding=[12, 8])
 
-        self.tab_home = tk.Frame(self.notebook, bg=self.colors["bg"])
-        self.tab_cart = tk.Frame(self.notebook, bg=self.colors["bg"])
-        self.tab_queue = tk.Frame(self.notebook, bg=self.colors["bg"])
+    def create_layout(self):
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        self.notebook.add(self.tab_home, text=" Menu ")
-        self.notebook.add(self.tab_cart, text=" Cart & Postfix ")
-        self.notebook.add(self.tab_queue, text=" Kitchen & Tracker ")
+        self.tab_dataset = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_dataset, text="📁 M1 & M3 (Data, Sort & Search)")
+        self.init_tab_dataset(self.tab_dataset)
 
-        self._build_home_tab()
-        self._build_cart_tab()
-        self._build_queue_tab()
+        self.tab_m2 = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_m2, text="⚙️ M2 (Cart, Queue & RPN)")
+        self.init_tab_m2(self.tab_m2)
 
-    def _build_home_tab(self):
-        search_frame = tk.Frame(self.tab_home, bg=self.colors["search_bg"], padx=10, pady=6)
-        search_frame.pack(fill="x", padx=15, pady=(10, 10))
+    def init_tab_dataset(self, parent):
+        control_frame = ttk.LabelFrame(parent, text=" Algoritma Sorting & Searching (M3) ", padding=10)
+        control_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        search_icon = tk.Label(search_frame, text="🔍", font=("Segoe UI", 11), fg=self.colors["text_muted"], bg=self.colors["search_bg"])
-        search_icon.pack(side="left", padx=(4, 8))
+        ttk.Label(control_frame, text="Kunci:").grid(row=0, column=0, sticky="w", padx=5)
+        self.sort_key_combo = ttk.Combobox(control_frame, values=["harga", "t_selesai_detik", "oid"], width=15, state="readonly")
+        self.sort_key_combo.current(0)
+        self.sort_key_combo.grid(row=0, column=1, padx=5)
 
-        self.search_entry = tk.Entry(search_frame, font=("Segoe UI", 10), bg=self.colors["search_bg"], fg=self.colors["text_white"], bd=0, insertbackground=self.colors["text_white"])
-        self.search_entry.insert(0, "Search coffee, drinks...")
-        self.search_entry.bind("<FocusIn>", self._clear_placeholder)
-        self.search_entry.bind("<KeyRelease>", self._filter_products)
-        self.search_entry.pack(side="left", fill="x", expand=True)
+        ttk.Button(control_frame, text="Insertion Sort O(n²)", command=self.run_insertion_sort).grid(row=0, column=2, padx=5)
+        ttk.Button(control_frame, text="Merge Sort O(n log n)", command=self.run_merge_sort).grid(row=0, column=3, padx=5)
 
-        filter_btn = tk.Button(search_frame, text="⚙", font=("Segoe UI", 10), bg=self.colors["accent"], fg="white", bd=0, width=3, height=1, cursor="hand2")
-        filter_btn.pack(side="right")
+        ttk.Separator(control_frame, orient=tk.VERTICAL).grid(row=0, column=4, sticky="ns", padx=10)
 
-        cat_frame = tk.Frame(self.tab_home, bg=self.colors["bg"])
-        cat_frame.pack(fill="x", padx=15, pady=(0, 10))
+        ttk.Label(control_frame, text="Cari OID:").grid(row=0, column=5, sticky="w", padx=5)
+        self.search_entry = ttk.Entry(control_frame, width=15)
+        self.search_entry.grid(row=0, column=6, padx=5)
 
-        self.cat_buttons = []
-        for cat in self.categories:
-            is_active = (cat == self.selected_category)
-            btn = tk.Button(cat_frame, text=cat, font=("Segoe UI", 8, "bold" if is_active else "normal"), bg=self.colors["accent"] if is_active else self.colors["card_bg"], fg="white" if is_active else self.colors["text_muted"], bd=0, padx=8, pady=4, cursor="hand2", command=lambda c=cat: self._select_category(c))
-            btn.pack(side="left", padx=(0, 5))
-            self.cat_buttons.append((cat, btn))
+        ttk.Button(control_frame, text="Linear Search", command=self.run_linear_search).grid(row=0, column=7, padx=5)
+        ttk.Button(control_frame, text="Binary Search", command=self.run_binary_search).grid(row=0, column=8, padx=5)
 
-        grid_container = tk.Frame(self.tab_home, bg=self.colors["bg"])
-        grid_container.pack(fill="both", expand=True, padx=15)
+        table_frame = ttk.Frame(parent, padding=10)
+        table_frame.pack(fill=tk.BOTH, expand=True)
 
-        canvas = tk.Canvas(grid_container, bg=self.colors["bg"], highlightthickness=0)
-        scrollbar = ttk.Scrollbar(grid_container, orient="vertical", command=canvas.yview)
-        self.scrollable_frame = tk.Frame(canvas, bg=self.colors["bg"])
+        columns = ("No", "OID", "Pelanggan", "Menu", "Harga", "Waktu (detik)")
+        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=20)
+        
+        for col in columns:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=130, anchor="center")
+        self.tree.column("Pelanggan", width=180, anchor="w")
+        self.tree.column("Menu", width=220, anchor="w")
 
-        self.scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
 
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        self.products_frame = self.scrollable_frame
-        self._render_products(self.products)
+    def init_tab_m2(self, parent):
+        m2_frame = ttk.LabelFrame(parent, text=" Simulasi Struktur Data M2 ", padding=15)
+        m2_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
 
-    def _clear_placeholder(self, event):
-        if self.search_entry.get() == "Search coffee, drinks...":
-            self.search_entry.delete(0, tk.END)
+        ttk.Label(m2_frame, text="Evaluator Ekspresi RPN (Postfix):", font=("Arial", 11, "bold")).grid(row=0, column=0, sticky="w", pady=5)
+        self.rpn_entry = ttk.Entry(m2_frame, width=40)
+        self.rpn_entry.insert(0, "50 20 + 3 *")
+        self.rpn_entry.grid(row=1, column=0, padx=5, sticky="w")
+        
+        ttk.Button(m2_frame, text="Hitung RPN", command=self.evaluate_rpn).grid(row=1, column=1, padx=5, sticky="w")
 
-    def _select_category(self, category_name):
-        self.selected_category = category_name
-        for cat, btn in self.cat_buttons:
-            if cat == category_name:
-                btn.configure(bg=self.colors["accent"], fg="white", font=("Segoe UI", 8, "bold"))
-            else:
-                btn.configure(bg=self.colors["card_bg"], fg=self.colors["text_muted"], font=("Segoe UI", 8, "normal"))
+        self.rpn_result_label = ttk.Label(m2_frame, text="Hasil: -", font=("Arial", 10))
+        self.rpn_result_label.grid(row=2, column=0, sticky="w", pady=10)
 
-        filtered = self.products if category_name == "All Coffee" else [p for p in self.products if p["category"] == category_name]
-        self._render_products(filtered)
+    def refresh_data_view(self, data_source=None):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
 
-    def _filter_products(self, event):
-        query = self.search_entry.get().lower()
-        if query == "search coffee, drinks...":
-            query = ""
-        filtered = [p for p in self.products if query in p["name"].lower() or query in p["subtitle"].lower()]
-        self._render_products(filtered)
+        source = data_source if data_source is not None else self.dataset_pesanan
+        n = source.size if hasattr(source, 'size') else len(source)
 
-    def _render_products(self, product_list):
-        for widget in self.products_frame.winfo_children():
-            widget.destroy()
+        for i in range(min(n, 500)):
+            item = source.get(i) if hasattr(source, 'get') else source[i]
+            self.tree.insert("", tk.END, values=(
+                i + 1,
+                getattr(item, 'oid', ''),
+                getattr(item, 'nama_pelanggan', ''),
+                getattr(item, 'menu', ''),
+                f"Rp {getattr(item, 'harga', 0):,.0f}",
+                getattr(item, 't_selesai_detik', 0)
+            ))
 
-        col_count = 2
-        for idx, prod in enumerate(product_list):
-            row = idx // col_count
-            col = idx % col_count
+    def run_insertion_sort(self):
+        kunci = self.sort_key_combo.get()
+        sorted_arr, comp, mov = insertion_sort(self.dataset_pesanan, kunci=kunci)
+        self.cached_sorted_data = sorted_arr
+        self.refresh_data_view(sorted_arr)
+        messagebox.showinfo("Insertion Sort Selesai", f"Perbandingan: {comp:,}\nPemindahan: {mov:,}")
 
-            card = tk.Frame(self.products_frame, bg=self.colors["card_bg"], padx=8, pady=8, width=175, height=210)
-            card.grid(row=row, column=col, padx=5, pady=6, sticky="nsew")
-            card.grid_propagate(False)
+    def run_merge_sort(self):
+        kunci = self.sort_key_combo.get()
+        sorted_arr, comp, mov = merge_sort(self.dataset_pesanan, kunci=kunci)
+        self.cached_sorted_data = sorted_arr
+        self.refresh_data_view(sorted_arr)
+        messagebox.showinfo("Merge Sort Selesai", f"Perbandingan: {comp:,}\nPemindahan: {mov:,}")
 
-            img_box = tk.Frame(card, bg=self.colors["card_inner"], height=90)
-            img_box.pack(fill="x")
-            img_box.pack_propagate(False)
-
-            icon_lbl = tk.Label(img_box, text=prod["icon"], font=("Segoe UI", 32), bg=self.colors["card_inner"])
-            icon_lbl.pack(expand=True)
-
-            rating_lbl = tk.Label(img_box, text=f"★ {prod['rating']}", font=("Segoe UI", 8, "bold"), fg=self.colors["star_gold"], bg="#2C2C38", padx=4, pady=1)
-            rating_lbl.place(x=4, y=4)
-
-            title_lbl = tk.Label(card, text=prod["name"], font=("Segoe UI", 9, "bold"), fg=self.colors["text_white"], bg=self.colors["card_bg"], anchor="w")
-            title_lbl.pack(fill="x", pady=(6, 2))
-
-            sub_lbl = tk.Label(card, text=prod["subtitle"], font=("Segoe UI", 7), fg=self.colors["text_muted"], bg=self.colors["card_bg"], anchor="w")
-            sub_lbl.pack(fill="x")
-
-            bottom_row = tk.Frame(card, bg=self.colors["card_bg"])
-            bottom_row.pack(fill="x", pady=(8, 0), side="bottom")
-
-            price_lbl = tk.Label(bottom_row, text=f"${prod['price']:.2f}", font=("Segoe UI", 10, "bold"), fg=self.colors["text_white"], bg=self.colors["card_bg"])
-            price_lbl.pack(side="left")
-
-            add_btn = tk.Button(bottom_row, text="+", font=("Segoe UI", 10, "bold"), bg=self.colors["accent"], fg="white", bd=0, width=3, height=1, cursor="hand2", command=lambda p=prod: self._add_to_cart(p))
-            add_btn.pack(side="right")
-
-    def _build_cart_tab(self):
-        container = tk.Frame(self.tab_cart, bg=self.colors["bg"], padx=15, pady=15)
-        container.pack(fill="both", expand=True)
-
-        lbl_cart = tk.Label(container, text="🛒 Active Cart (Stack Backtracking)", font=("Segoe UI", 11, "bold"), fg=self.colors["text_white"], bg=self.colors["bg"])
-        lbl_cart.pack(anchor="w")
-
-        self.cart_listbox = tk.Listbox(container, bg=self.colors["card_bg"], fg="white", bd=0, highlightthickness=0, font=("Segoe UI", 10), height=6)
-        self.cart_listbox.pack(fill="x", pady=8)
-
-        btn_row = tk.Frame(container, bg=self.colors["bg"])
-        btn_row.pack(fill="x", pady=(0, 15))
-
-        undo_btn = tk.Button(btn_row, text="↩ Pop Last Item (Stack Undo)", bg="#E74C3C", fg="white", bd=0, padx=10, pady=5, font=("Segoe UI", 9, "bold"), command=self._undo_cart_stack)
-        undo_btn.pack(side="left")
-
-        postfix_frame = tk.LabelFrame(container, text=" 🧮 Postfix Discount & Total Calculation ", bg=self.colors["card_bg"], fg=self.colors["accent"], font=("Segoe UI", 9, "bold"), padx=10, pady=10)
-        postfix_frame.pack(fill="x", pady=10)
-
-        info_lbl = tk.Label(postfix_frame, text="Masukkan rumus postfix (misal: '15 0.9 *' = diskon 10%):\nContoh default: [Subtotal] 0.9 *", font=("Segoe UI", 8), fg=self.colors["text_muted"], bg=self.colors["card_bg"], justify="left")
-        info_lbl.pack(anchor="w", pady=(0, 5))
-
-        self.postfix_entry = tk.Entry(postfix_frame, font=("Segoe UI", 10), bg=self.colors["search_bg"], fg="white", bd=0)
-        self.postfix_entry.insert(0, "10 5 + 0.9 *")
-        self.postfix_entry.pack(fill="x", pady=5)
-
-        calc_btn = tk.Button(postfix_frame, text="Hitung Total via Postfix Stack", bg=self.colors["accent"], fg="white", bd=0, font=("Segoe UI", 9, "bold"), command=self._calculate_postfix_bill)
-        calc_btn.pack(fill="x", pady=5)
-
-        self.lbl_subtotal = tk.Label(postfix_frame, text="Subtotal: $0.00", font=("Segoe UI", 10), fg="white", bg=self.colors["card_bg"])
-        self.lbl_subtotal.pack(anchor="w", pady=(5, 0))
-
-        self.lbl_postfix_result = tk.Label(postfix_frame, text="Total Setelah Postfix: $0.00", font=("Segoe UI", 11, "bold"), fg=self.colors["badge_green"], bg=self.colors["card_bg"])
-        self.lbl_postfix_result.pack(anchor="w")
-
-        checkout_btn = tk.Button(container, text="🚀 Checkout Order -> Enqueue ke Dapur", bg=self.colors["badge_green"], fg="black", bd=0, font=("Segoe UI", 11, "bold"), pady=8, command=self._checkout_to_naive_queue)
-        checkout_btn.pack(fill="x", side="bottom", pady=10)
-
-    def _build_queue_tab(self):
-        container = tk.Frame(self.tab_queue, bg=self.colors["bg"], padx=15, pady=15)
-        container.pack(fill="both", expand=True)
-
-        lbl_q1 = tk.Label(container, text="👨‍🍳 Dapur: Order Processing Queue (Naive FIFO)", font=("Segoe UI", 10, "bold"), fg=self.colors["text_white"], bg=self.colors["bg"])
-        lbl_q1.pack(anchor="w")
-
-        self.naive_queue_list = tk.Listbox(container, bg=self.colors["card_bg"], fg="white", bd=0, highlightthickness=0, font=("Segoe UI", 9), height=5)
-        self.naive_queue_list.pack(fill="x", pady=5)
-
-        deq_naive_btn = tk.Button(container, text="⚡ Dequeue Naive (Proses Pesanan Paling Depan)", bg=self.colors["accent"], fg="white", bd=0, font=("Segoe UI", 9, "bold"), pady=5, command=self._dequeue_naive_order)
-        deq_naive_btn.pack(fill="x", pady=(0, 15))
-
-        lbl_q2 = tk.Label(container, text="🔄 Order History Tracker (Circular Queue / Ring Buffer)", font=("Segoe UI", 10, "bold"), fg=self.colors["text_white"], bg=self.colors["bg"])
-        lbl_q2.pack(anchor="w")
-
-        lbl_q2_sub = tk.Label(container, text="Mencatat maksimal 4 aktivitas pesanan terakhir secara berputar (Cap: 4)", font=("Segoe UI", 8), fg=self.colors["text_muted"], bg=self.colors["bg"])
-        lbl_q2_sub.pack(anchor="w")
-
-        self.circular_queue_list = tk.Listbox(container, bg=self.colors["card_bg"], fg=self.colors["star_gold"], bd=0, highlightthickness=0, font=("Segoe UI", 9), height=5)
-        self.circular_queue_list.pack(fill="x", pady=5)
-
-        deq_circ_btn = tk.Button(container, text="🗑️ Dequeue Circular Buffer (Hapus Status Tertua)", bg="#9B59B6", fg="white", bd=0, font=("Segoe UI", 9, "bold"), pady=5, command=self._dequeue_circular_tracker)
-        deq_circ_btn.pack(fill="x", pady=5)
-
-    def _add_to_cart(self, product):
-        self.cart_stack.push(product)
-        self.cart_items.append(product)
-        self._refresh_cart_ui()
-        messagebox.showinfo("Cart Update", f"Pushed '{product['name']}' to Stack Cart!")
-
-    def _undo_cart_stack(self):
-        popped = self.cart_stack.pop()
-        if popped:
-            self.cart_items.remove(popped)
-            self._refresh_cart_ui()
-            messagebox.showinfo("Stack Pop", f"Popped/Undid '{popped['name']}' from Cart!")
-        else:
-            messagebox.showwarning("Stack Empty", "Keranjang kosong!")
-
-    def _refresh_cart_ui(self):
-        self.cart_listbox.delete(0, tk.END)
-        subtotal = 0.0
-        for idx, item in enumerate(self.cart_items, 1):
-            self.cart_listbox.insert(tk.END, f"{idx}. {item['name']} - ${item['price']:.2f}")
-            subtotal += item["price"]
-
-        self.lbl_subtotal.config(text=f"Subtotal: ${subtotal:.2f}")
-        if subtotal > 0:
-            self.postfix_entry.delete(0, tk.END)
-            self.postfix_entry.insert(0, f"{subtotal:.2f} 0.9 *")
-
-    def _calculate_postfix_bill(self):
-        expr = self.postfix_entry.get()
-        try:
-            total = evaluate_postfix(expr)
-            self.lbl_postfix_result.config(text=f"Total Setelah Postfix: ${total:.2f}")
-        except Exception as e:
-            messagebox.showerror("Postfix Error", f"Ekspresi Postfix Tidak Valid:\n{str(e)}")
-
-    def _checkout_to_naive_queue(self):
-        if not self.cart_items:
-            messagebox.showwarning("Empty Cart", "Keranjang kosong!")
+    def run_linear_search(self):
+        target = self.search_entry.get().strip()
+        if not target:
+            messagebox.showwarning("Peringatan", "Masukkan OID yang ingin dicari!")
             return
-
-        items_summary = ", ".join([p["name"] for p in self.cart_items])
-        order_data = f"Order #{self.order_naive_queue.size() + 1}: [{items_summary}]"
-        
-        self.order_naive_queue.enqueue(order_data)
-        
-        self.cart_items.clear()
-        self.cart_stack = Stack()
-        self._refresh_cart_ui()
-
-        self._refresh_queue_ui()
-        messagebox.showinfo("Checkout Success", "Pesanan berhasil di-enqueue ke Antrean Dapur (Naive Queue)!")
-
-    def _dequeue_naive_order(self):
-        processed = self.order_naive_queue.dequeue()
-        if processed:
-            self.recent_activity_circular.enqueue(f"Completed: {processed}")
-            self._refresh_queue_ui()
-            messagebox.showinfo("Naive Dequeue", f"Diproses: {processed}\nStatus dikirim ke Circular Tracker!")
+        idx, item, comp = linear_search(self.dataset_pesanan, target)
+        if idx != -1:
+            messagebox.showinfo("Ditemukan (Linear Search)", f"Data ditemukan pada indeks {idx}\nPerbandingan: {comp}\nPelanggan: {item.nama_pelanggan}")
         else:
-            messagebox.showwarning("Queue Empty", "Tidak ada antrean pesanan di Dapur.")
+            messagebox.showwarning("Tidak Ditemukan", f"OID {target} tidak ditemukan.\nTotal Perbandingan: {comp}")
 
-    def _dequeue_circular_tracker(self):
-        removed = self.recent_activity_circular.dequeue()
-        if removed:
-            self._refresh_queue_ui()
-            messagebox.showinfo("Circular Dequeue", f"Dihapus dari Ring Buffer: {removed}")
+    def run_binary_search(self):
+        target = self.search_entry.get().strip()
+        if not target:
+            messagebox.showwarning("Peringatan", "Masukkan OID yang ingin dicari!")
+            return
+        
+        if self.cached_sorted_data is None:
+            self.cached_sorted_data, _, _ = merge_sort(self.dataset_pesanan, kunci='oid')
+
+        idx, item, comp = binary_search(self.cached_sorted_data, target)
+        if idx != -1:
+            messagebox.showinfo("Ditemukan (Binary Search)", f"Data ditemukan pada indeks terurut {idx}\nPerbandingan: {comp}\nPelanggan: {item.nama_pelanggan}")
         else:
-            messagebox.showwarning("Circular Empty", "Circular Queue Tracker kosong.")
+            messagebox.showwarning("Tidak Ditemukan", f"OID {target} tidak ditemukan.\nTotal Perbandingan: {comp}")
 
-    def _refresh_queue_ui(self):
-        self.naive_queue_list.delete(0, tk.END)
-        for order in self.order_naive_queue.get_all():
-            self.naive_queue_list.insert(tk.END, f"⏳ {order}")
+    def evaluate_rpn(self):
+        expr = self.rpn_entry.get().strip()
+        try:
+            hasil = PostfixEvaluator.evaluate(expr)
+            self.rpn_result_label.config(text=f"Hasil: {hasil}")
+        except Exception as e:
+            messagebox.showerror("Error RPN", str(e))
 
-        self.circular_queue_list.delete(0, tk.END)
-        for act in self.recent_activity_circular.get_all():
-            self.circular_queue_list.insert(tk.END, f"✅ {act}")
 
 if __name__ == "__main__":
-    app = JavaCafeApp()
-    app.mainloop()
+    root = tk.Tk()
+    app = App2EZ4U(root)
+    root.mainloop()
